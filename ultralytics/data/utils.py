@@ -159,7 +159,7 @@ def verify_image(args: tuple) -> tuple:
     nf, nc, msg = 0, 0, ""
     try:
         # Special-case RAW files which are not handled by PIL: use read_raw()
-        ext = Path(im_file).suffix.lower().lstrip('.')
+        ext = Path(im_file).suffix.lower().lstrip(".")
         if ext == "raw":
             try:
                 from ultralytics.utils.raw_reader import read_raw
@@ -192,7 +192,8 @@ def verify_image(args: tuple) -> tuple:
 
 
 def verify_image_label(args: tuple) -> list:
-    """Verify one image-label pair.
+    """
+    Verify one image-label pair.
 
     Supports two-class-per-bbox format when label lines have 6 columns:
         cls1 cls2 x_center y_center width height
@@ -204,7 +205,7 @@ def verify_image_label(args: tuple) -> list:
     nm, nf, ne, nc, msg, segments, keypoints = 0, 0, 0, 0, "", [], None
     try:
         # Verify images. Use read_raw() for RAW files since PIL cannot open arbitrary RAW formats.
-        ext = Path(im_file).suffix.lower().lstrip('.')
+        ext = Path(im_file).suffix.lower().lstrip(".")
         if ext == "raw":
             from ultralytics.utils.raw_reader import read_raw
 

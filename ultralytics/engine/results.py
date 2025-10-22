@@ -249,9 +249,9 @@ class Results(SimpleClass, DataExportMixin):
         obb: torch.Tensor | None = None,
         speed: dict[str, float] | None = None,
         # optional secondary-class support (e.g. material labels)
-    names2: dict[int, str] | None = None,
-    cls2: torch.Tensor | np.ndarray | None = None,
-    cls2_probs: torch.Tensor | np.ndarray | None = None,
+        names2: dict[int, str] | None = None,
+        cls2: torch.Tensor | np.ndarray | None = None,
+        cls2_probs: torch.Tensor | np.ndarray | None = None,
     ) -> None:
         """
         Initialize the Results class for storing and manipulating inference results.
@@ -595,7 +595,7 @@ class Results(SimpleClass, DataExportMixin):
                     primary_part = f"{name} {d_conf:.2f}" if conf else name
                     # secondary score if available
                     sec_score = None
-                    if getattr(self, 'cls2_probs', None) is not None:
+                    if getattr(self, "cls2_probs", None) is not None:
                         try:
                             c2 = int(self.cls2[i])
                             sec_score = float(self.cls2_probs[i, c2].cpu().item())
@@ -738,12 +738,12 @@ class Results(SimpleClass, DataExportMixin):
 
                 secondary = None
                 sec_score = None
-                if getattr(self, 'cls2', None) is not None and getattr(self, 'names2', None) is not None:
+                if getattr(self, "cls2", None) is not None and getattr(self, "names2", None) is not None:
                     try:
                         if i < len(self.cls2):
                             c2 = int(self.cls2[i])
                             secondary = self.names2.get(c2, str(c2)) if self.names2 else str(c2)
-                            if getattr(self, 'cls2_probs', None) is not None:
+                            if getattr(self, "cls2_probs", None) is not None:
                                 try:
                                     sec_score = float(self.cls2_probs[i, c2].cpu().item())
                                 except Exception:
@@ -805,7 +805,7 @@ class Results(SimpleClass, DataExportMixin):
                 # append secondary-class index if available
                 if self.cls2 is not None:
                     try:
-                        sec = int(self.cls2[j].item()) if hasattr(self.cls2[j], 'item') else int(self.cls2[j])
+                        sec = int(self.cls2[j].item()) if hasattr(self.cls2[j], "item") else int(self.cls2[j])
                         line = (*line, sec)
                     except Exception:
                         # if cls2 cannot be converted, skip it

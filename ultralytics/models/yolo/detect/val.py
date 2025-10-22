@@ -100,11 +100,11 @@ class DetectionValidator(BaseValidator):
         self.jdict = []
         self.metrics.names = model.names
         self.confusion_matrix = ConfusionMatrix(names=model.names, save_matches=self.args.plots and self.args.visualize)
-        
+
         # Support for secondary classification head (nc2)
         self.names2 = getattr(model, "names2", None)
         self.nc2 = len(self.names2) if self.names2 else 0
-        
+
         # If model doesn't have names2 (e.g., fused model), try to get it from data.yaml
         if self.nc2 == 0 and "nc2" in self.data and self.data["nc2"] > 0:
             self.nc2 = self.data["nc2"]
@@ -115,12 +115,14 @@ class DetectionValidator(BaseValidator):
                 # Create default material names
                 self.names2 = {i: str(i) for i in range(self.nc2)}
             LOGGER.info(f"Restored names2 from data.yaml: nc2={self.nc2}")
-        
+
         self.confusion_matrix2 = None
         self.metrics2 = None  # Secondary classification metrics
         self.stats2 = None  # Secondary classification stats
         if self.nc2 > 0:
-            self.confusion_matrix2 = ConfusionMatrix(names=self.names2, save_matches=self.args.plots and self.args.visualize)
+            self.confusion_matrix2 = ConfusionMatrix(
+                names=self.names2, save_matches=self.args.plots and self.args.visualize
+            )
             self.metrics2 = DetMetrics(names=self.names2)  # Independent metrics for cls2
 
     def get_desc(self) -> str:
@@ -157,7 +159,7 @@ class DetectionValidator(BaseValidator):
             result = {"bboxes": x[:, :4], "conf": x[:, 4], "cls": x[:, 5], "extra": x[:, 6:]}
             # If nc2 exists, extract cls2 predictions (argmax of nc2 classes in extra)
             if self.nc2 > 0 and x.shape[1] > 6:
-                cls2_scores = x[:, 6:6+self.nc2]  # Get nc2 class scores
+                cls2_scores = x[:, 6 : 6 + self.nc2]  # Get nc2 class scores
                 result["cls2"] = cls2_scores.argmax(dim=1)  # Get predicted class index
                 result["cls2_conf"] = cls2_scores.max(dim=1).values  # Get confidence for cls2
             results.append(result)  # Add result to list
@@ -182,7 +184,7 @@ class DetectionValidator(BaseValidator):
         ratio_pad = batch["ratio_pad"][si]
         if cls.shape[0]:
             bbox = ops.xywh2xyxy(bbox) * torch.tensor(imgsz, device=self.device)[[1, 0, 1, 0]]  # target boxes
-        
+
         result = {
             "cls": cls,
             "bboxes": bbox,
@@ -191,12 +193,12 @@ class DetectionValidator(BaseValidator):
             "ratio_pad": ratio_pad,
             "im_file": batch["im_file"][si],
         }
-        
+
         # Add cls2 if present in batch
         if "cls2" in batch and self.nc2 > 0:
             cls2 = batch["cls2"][idx].squeeze(-1)
             result["cls2"] = cls2
-        
+
         return result
 
     def _prepare_pred(self, pred: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
@@ -254,7 +256,7 @@ class DetectionValidator(BaseValidator):
                     "pred_cls": np.zeros(0) if no_pred else predn["cls"].cpu().numpy(),
                 }
             )
-            
+
             # Update metrics for secondary classification (cls2) if present
             if self.metrics2 is not None and "cls2" in predn and "cls2" in pbatch:
                 cls2 = pbatch["cls2"].cpu().numpy()
@@ -263,7 +265,7 @@ class DetectionValidator(BaseValidator):
                 predn2["conf"] = predn.get("cls2_conf", predn["conf"])  # Use cls2 confidence
                 pbatch2 = {k: v for k, v in pbatch.items()}
                 pbatch2["cls"] = pbatch["cls2"]  # Use cls2 as ground truth
-                
+
                 # # Debug: Log cls2 update_stats (only first batch)
                 # if si == 0 and self.seen == 1:
                 #     LOGGER.info(f"DEBUG: Calling metrics2.update_stats")
@@ -271,7 +273,7 @@ class DetectionValidator(BaseValidator):
                 #     LOGGER.info(f"DEBUG: pbatch2 cls shape: {pbatch2['cls'].shape}, values: {pbatch2['cls']}")
                 #     LOGGER.info(f"DEBUG: predn2 bboxes shape: {predn2['bboxes'].shape}")
                 #     LOGGER.info(f"DEBUG: pbatch2 bboxes shape: {pbatch2['bboxes'].shape}")
-                
+
                 self.metrics2.update_stats(
                     {
                         **self._process_batch(predn2, pbatch2),
@@ -281,7 +283,7 @@ class DetectionValidator(BaseValidator):
                         "pred_cls": np.zeros(0) if no_pred else predn2["cls"].cpu().numpy(),
                     }
                 )
-            
+
             # Evaluate
             if self.args.plots:
                 self.confusion_matrix.process_batch(predn, pbatch, conf=self.args.conf)
@@ -320,15 +322,15 @@ class DetectionValidator(BaseValidator):
                 # Plot second confusion matrix if exists
                 if self.confusion_matrix2 is not None:
                     self.confusion_matrix2.plot(
-                        save_dir=self.save_dir, 
-                        normalize=normalize, 
+                        save_dir=self.save_dir,
+                        normalize=normalize,
                         on_plot=self.on_plot,
-                        names_suffix="_cls2"  # Add suffix to distinguish from first matrix
+                        names_suffix="_cls2",  # Add suffix to distinguish from first matrix
                     )
         self.metrics.speed = self.speed
         self.metrics.confusion_matrix = self.confusion_matrix
         self.metrics.save_dir = self.save_dir
-        
+
         # Process metrics2 if present
         if self.metrics2 is not None:
             self.metrics2.speed = self.speed
@@ -345,51 +347,57 @@ class DetectionValidator(BaseValidator):
         """
         self.metrics.process(save_dir=self.save_dir, plot=self.args.plots, on_plot=self.on_plot)
         stats = self.metrics.results_dict
-        
+
         # Get cls1 fitness (original)
         fitness1 = stats.get("fitness", 0.0)
-        
+
         # Process metrics2 if present and has data
-        if self.metrics2 is not None and len(self.metrics2.stats.get('tp', [])) > 0:
+        if self.metrics2 is not None and len(self.metrics2.stats.get("tp", [])) > 0:
             try:
                 # LOGGER.info(f"DEBUG: Processing metrics2, tp length: {len(self.metrics2.stats['tp'])}")
                 # LOGGER.info(f"DEBUG: metrics2 stats keys: {self.metrics2.stats.keys()}")
                 # if len(self.metrics2.stats['tp']) > 0:
-                    # LOGGER.info(f"DEBUG: First tp shape: {self.metrics2.stats['tp'][0].shape}")
+                # LOGGER.info(f"DEBUG: First tp shape: {self.metrics2.stats['tp'][0].shape}")
                 # Don't plot during final evaluation to avoid file access issues
                 # Just compute the metrics without saving plots
                 self.metrics2.process(save_dir=self.save_dir / "cls2", plot=False, on_plot=self.on_plot)
                 stats2 = self.metrics2.results_dict
-                
+
                 # Get cls2 fitness
                 fitness2 = stats2.get("fitness", 0.0)
-                
+
                 # Add cls2 metrics with (M) suffix for "Material"
                 for key, value in stats2.items():
                     new_key = key.replace("(B)", "(M)")  # Replace Box with Material
                     stats[new_key] = value
-                
+
                 # ⭐ Calculate combined fitness (weighted average)
                 # Get mat_fitness_weight from trainer args or use default
-                mat_weight = getattr(self.args, 'mat_fitness_weight', 0.5)  # Default 0.5
+                mat_weight = getattr(self.args, "mat_fitness_weight", 0.5)  # Default 0.5
                 combined_fitness = (1 - mat_weight) * fitness1 + mat_weight * fitness2
-                
+
                 # Override original fitness with combined fitness
                 stats["fitness"] = combined_fitness
                 stats["fitness/cls1"] = fitness1  # Keep original cls1 fitness
                 stats["fitness/cls2"] = fitness2  # Keep original cls2 fitness
-                
-                LOGGER.info(f"Combined Fitness: {combined_fitness:.5f} (cls1: {fitness1:.5f} × {1-mat_weight:.2f} + cls2: {fitness2:.5f} × {mat_weight:.2f})")
-                
+
+                LOGGER.info(
+                    f"Combined Fitness: {combined_fitness:.5f} (cls1: {fitness1:.5f} × {1 - mat_weight:.2f} + cls2: {fitness2:.5f} × {mat_weight:.2f})"
+                )
+
                 # Don't clear stats here - keep them for potential later access
                 # self.metrics2.clear_stats()  # Commented out to preserve cls2 stats
             except Exception as e:
-                LOGGER.warning(f"Failed to process metrics2: {e}. This may be because cls2 labels are not available in the validation set.")
+                LOGGER.warning(
+                    f"Failed to process metrics2: {e}. This may be because cls2 labels are not available in the validation set."
+                )
         elif self.metrics2 is not None:
-            LOGGER.warning("No cls2 data collected during validation. Check if cls2 labels are present in your dataset.")
+            LOGGER.warning(
+                "No cls2 data collected during validation. Check if cls2 labels are present in your dataset."
+            )
             LOGGER.info(f"DEBUG: metrics2.stats: {self.metrics2.stats}")
             LOGGER.info(f"DEBUG: metrics2.stats['tp'] length: {len(self.metrics2.stats.get('tp', []))}")
-        
+
         self.metrics.clear_stats()
         return stats
 
@@ -397,7 +405,7 @@ class DetectionValidator(BaseValidator):
         """Print training/validation set metrics per class."""
         # Print primary classification (shape) results
         pf = "%22s" + "%11i" * 2 + "%11.3g" * len(self.metrics.keys)  # print format
-        LOGGER.info("\n" + "="*100)
+        LOGGER.info("\n" + "=" * 100)
         LOGGER.info("Primary Classification (Shape) Results:")
         LOGGER.info(pf % ("all", self.seen, self.metrics.nt_per_class.sum(), *self.metrics.mean_results()))
         if self.metrics.nt_per_class.sum() == 0:
@@ -415,18 +423,20 @@ class DetectionValidator(BaseValidator):
                         *self.metrics.class_result(i),
                     )
                 )
-        
+
         # Print secondary classification (material) results if available
         # Check if metrics2 has valid data (nt_per_class should exist and have data)
-        if (self.metrics2 is not None and 
-            hasattr(self.metrics2, 'nt_per_class') and 
-            self.metrics2.nt_per_class is not None and
-            len(self.metrics2.nt_per_class) > 0):
-            LOGGER.info("\n" + "="*100)
+        if (
+            self.metrics2 is not None
+            and hasattr(self.metrics2, "nt_per_class")
+            and self.metrics2.nt_per_class is not None
+            and len(self.metrics2.nt_per_class) > 0
+        ):
+            LOGGER.info("\n" + "=" * 100)
             LOGGER.info("Secondary Classification (Material) Results:")
             pf2 = "%22s" + "%11i" * 2 + "%11.3g" * len(self.metrics2.keys)
             LOGGER.info(pf2 % ("all", self.seen, self.metrics2.nt_per_class.sum(), *self.metrics2.mean_results()))
-            
+
             # Print per-class results only during final validation (not during training)
             # During training: only show summary; Final validation: show all details
             if not self.training and self.nc2 > 1 and len(self.metrics2.ap_class_index):
@@ -440,13 +450,13 @@ class DetectionValidator(BaseValidator):
                             *self.metrics2.class_result(i),
                         )
                     )
-            LOGGER.info("="*100 + "\n")
+            LOGGER.info("=" * 100 + "\n")
         elif self.metrics2 is not None and self.nc2 > 0:
-            LOGGER.info("\n" + "="*100)
+            LOGGER.info("\n" + "=" * 100)
             LOGGER.info("Secondary Classification (Material) Results:")
             LOGGER.info("⚠️  No material classification data collected during validation")
             LOGGER.info("   This may be because cls2 labels are not present in the validation set")
-            LOGGER.info("="*100 + "\n")
+            LOGGER.info("=" * 100 + "\n")
 
     def _process_batch(self, preds: dict[str, torch.Tensor], batch: dict[str, Any]) -> dict[str, np.ndarray]:
         """
@@ -507,7 +517,7 @@ class DetectionValidator(BaseValidator):
             paths=batch["im_file"],
             fname=self.save_dir / f"val_batch{ni}_labels.jpg",
             names=self.names,
-            names2=self.names2 if hasattr(self, 'names2') else None,
+            names2=self.names2 if hasattr(self, "names2") else None,
             on_plot=self.on_plot,
         )
 
@@ -537,7 +547,7 @@ class DetectionValidator(BaseValidator):
             paths=batch["im_file"],
             fname=self.save_dir / f"val_batch{ni}_pred.jpg",
             names=self.names,
-            names2=self.names2 if hasattr(self, 'names2') else None,
+            names2=self.names2 if hasattr(self, "names2") else None,
             on_plot=self.on_plot,
         )  # pred
 
