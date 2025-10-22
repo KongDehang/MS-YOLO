@@ -57,7 +57,11 @@ class DetectionPredictor(BasePredictor):
         # but when a model has a secondary-class head (nc2) we must include those channels so they aren't treated as
         # 'extra' mask data. Compute primary nc from model.names or model.nc and add nc2 if present.
         try:
-            nc_primary = len(getattr(self.model, "names", [])) if getattr(self.model, "names", None) is not None else int(getattr(self.model, "nc", 0))
+            nc_primary = (
+                len(getattr(self.model, "names", []))
+                if getattr(self.model, "names", None) is not None
+                else int(getattr(self.model, "nc", 0))
+            )
         except Exception:
             nc_primary = 0
         nc2 = int(getattr(self.model, "nc2", 0) or 0)
@@ -146,7 +150,7 @@ class DetectionPredictor(BasePredictor):
             inner = getattr(self.model, "model", None)
             if inner is not None:
                 # inner may be DetectionModel instance
-                det_head = inner.model[-1] if hasattr(inner, 'model') else inner[-1]
+                det_head = inner.model[-1] if hasattr(inner, "model") else inner[-1]
                 nc2 = getattr(det_head, "nc2", None)
                 if names2 is None:
                     names2 = getattr(inner, "names2", None)
@@ -156,26 +160,26 @@ class DetectionPredictor(BasePredictor):
         # fallback: try to read from AutoBackend.yaml if available
         if nc2 is None:
             try:
-                yaml = getattr(self.model, 'yaml', None)
+                yaml = getattr(self.model, "yaml", None)
                 if yaml and isinstance(yaml, dict):
-                    nc2 = int(yaml.get('nc2', 0)) if yaml.get('nc2', None) is not None else None
+                    nc2 = int(yaml.get("nc2", 0)) if yaml.get("nc2", None) is not None else None
                     if names2 is None:
-                        names2 = yaml.get('names2', None)
+                        names2 = yaml.get("names2", None)
             except Exception:
                 pass
 
         # If names2 still None or appears to be numeric placeholders, try loading from predictor data or data yaml
         if names2 is None:
             try:
-                data_cfg = getattr(self, 'data', None)
+                data_cfg = getattr(self, "data", None)
                 if isinstance(data_cfg, dict):
-                    names2 = data_cfg.get('names2', None)
+                    names2 = data_cfg.get("names2", None)
             except Exception:
                 names2 = None
 
         if names2 is None:
             try:
-                data_arg = getattr(self.args, 'data', None)
+                data_arg = getattr(self.args, "data", None)
                 from pathlib import Path
 
                 if isinstance(data_arg, str) and Path(data_arg).exists():
@@ -183,7 +187,7 @@ class DetectionPredictor(BasePredictor):
                         import yaml as _yaml
 
                         y = _yaml.safe_load(Path(data_arg).read_text())
-                        names2 = y.get('names2', None)
+                        names2 = y.get("names2", None)
                     except Exception:
                         names2 = None
             except Exception:
@@ -193,16 +197,17 @@ class DetectionPredictor(BasePredictor):
         if names2 is None:
             try:
                 from pathlib import Path
+
                 import yaml as _yaml
 
                 # find repo root and look for a top-level datasets/ directory
-                repo_datasets = Path(__file__).resolve().parents[5] / 'datasets'
+                repo_datasets = Path(__file__).resolve().parents[5] / "datasets"
                 if repo_datasets.exists():
-                    for p in repo_datasets.rglob('data.yaml'):
+                    for p in repo_datasets.rglob("data.yaml"):
                         try:
                             y = _yaml.safe_load(p.read_text())
-                            if y and isinstance(y, dict) and y.get('names2', None) is not None:
-                                names2 = y.get('names2')
+                            if y and isinstance(y, dict) and y.get("names2", None) is not None:
+                                names2 = y.get("names2")
                                 break
                         except Exception:
                             continue
@@ -248,15 +253,16 @@ class DetectionPredictor(BasePredictor):
             # try to find a better names2 from dataset YAMLs
             try:
                 from pathlib import Path
+
                 import yaml as _yaml
 
                 repo_root = Path(__file__).resolve().parents[4]
-                repo_datasets = repo_root / 'datasets'
+                repo_datasets = repo_root / "datasets"
                 if repo_datasets.exists():
-                    for p in repo_datasets.rglob('data.yaml'):
+                    for p in repo_datasets.rglob("data.yaml"):
                         try:
                             y = _yaml.safe_load(p.read_text())
-                            cand = y.get('names2', None) if isinstance(y, dict) else None
+                            cand = y.get("names2", None) if isinstance(y, dict) else None
                             if cand:
                                 # normalize candidate
                                 if isinstance(cand, (list, tuple)):
