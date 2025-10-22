@@ -1,0 +1,61 @@
+# Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
+
+# YOLOv8 Multi-Spectral Multi-Label Model with BandAttention (v3)
+# This version integrates BandAttention modules into the backbone to enhance
+# spectral feature learning for multi-spectral material classification.
+# Model docs: https://docs.ultralytics.com/models/yolov8
+# Task docs: https://docs.ultralytics.com/tasks/detect
+
+# Parameters  multispectral multi-label
+nc: 4 # number of classes1 (shape: bottle, round can, round cup, square box)
+nc2: 5 # number of classes2 (material: cr plastic, metal, paper, glass, w plastic)
+channels: 1  # input channels (1 for multi-spectral, 3 for RGB)
+
+scales: # model compound scaling constants, i.e. 'model=yolov8n.yaml' will call yolov8.yaml with scale 'n'
+  # [depth, width, max_channels]
+  n: [0.33, 0.25, 1024] # YOLOv8n summary: 129 layers, 3157200 parameters, 3157184 gradients, 8.9 GFLOPS
+  s: [0.33, 0.50, 1024] # YOLOv8s summary: 129 layers, 11166560 parameters, 11166544 gradients, 28.8 GFLOPS
+  m: [0.67, 0.75, 768] # YOLOv8m summary: 169 layers, 25902640 parameters, 25902624 gradients, 79.3 GFLOPS
+  l: [1.00, 1.00, 512] # YOLOv8l summary: 209 layers, 43691520 parameters, 43691504 gradients, 165.7 GFLOPS
+  x: [1.00, 1.25, 512] # YOLOv8x summary: 209 layers, 68229648 parameters, 68229632 gradients, 258.5 GFLOPS
+
+# YOLOv8.0n backbone with BandAttention
+backbone:
+  # [from, repeats, module, args]
+  - [-1, 1, Conv, [64, 3, 2]] # 0-P1/2
+  - [-1, 1, BandAttentionV2, []] # 1-BA after first conv (auto-detect channels)
+  - [-1, 1, Conv, [128, 3, 2]] # 2-P2/4
+  - [-1, 3, C2f, [128, True]]
+  - [-1, 1, BandAttentionV2, []] # 4-BA after P2 (auto-detect channels)
+  - [-1, 1, Conv, [256, 3, 2]] # 5-P3/8
+  - [-1, 6, C2f, [256, True]]
+  - [-1, 1, BandAttentionV2, []] # 7-BA after P3 (auto-detect channels)
+  - [-1, 1, Conv, [512, 3, 2]] # 8-P4/16
+  - [-1, 6, C2f, [512, True]]
+  - [-1, 1, BandAttentionV2, []] # 10-BA after P4 (auto-detect channels)
+  - [-1, 1, Conv, [1024, 3, 2]] # 11-P5/32
+  - [-1, 3, C2f, [1024, True]]
+  - [-1, 1, SPPF, [1024, 5]] # 13
+
+# YOLOv8.0n head
+head:
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]
+  - [[-1, 9], 1, Concat, [1]] # cat backbone P4 (index adjusted)
+  - [-1, 3, C2f, [512]] # 16
+
+  - [-1, 1, nn.Upsample, [None, 2, "nearest"]]
+  - [[-1, 6], 1, Concat, [1]] # cat backbone P3 (index adjusted)
+  - [-1, 3, C2f, [256]] # 19 (P3/8-small)
+
+  - [-1, 1, Conv, [256, 3, 2]]
+  - [[-1, 16], 1, Concat, [1]] # cat head P4
+  - [-1, 3, C2f, [512]] # 22 (P4/16-medium)
+
+  - [-1, 1, Conv, [512, 3, 2]]
+  - [[-1, 13], 1, Concat, [1]] # cat head P5
+  - [-1, 3, C2f, [1024]] # 25 (P5/32-large)
+
+  - [[19, 22, 25], 1, Detect, [nc]] # Detect(P3, P4, P5)
+  # nc2 will be added automatically by tasks.py when nc2 is specified
+  # BandAttention modules help the model focus on important spectral bands
+  # cv3b_transform layers provide independent features for material classification
