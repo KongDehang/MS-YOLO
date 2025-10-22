@@ -374,7 +374,7 @@ class BaseTrainer:
         epoch = self.start_epoch
         self.optimizer.zero_grad()  # zero any resumed gradients to ensure stability on train start
 
-        is_dynamic_mat = False   # New flag to track if dynamic mat scheduling is used
+        is_dynamic_mat = False  # New flag to track if dynamic mat scheduling is used
         while True:
             self.epoch = epoch
             self.run_callbacks("on_train_epoch_start")
@@ -385,9 +385,9 @@ class BaseTrainer:
             # Material-loss weight scheduling (mat_weight)
             # Supports args.mat_start and args.mat_end for linear schedule across epochs.
             if is_dynamic_mat:
-              mat_start = 0.5
-              mat_end = 0.8
-              try:
+                mat_start = 0.5
+                mat_end = 0.8
+                try:
                     start = float(mat_start)
                     end = float(mat_end) if mat_end is not None else start
                     t = epoch / max(1, (self.epochs - 1))
@@ -398,12 +398,16 @@ class BaseTrainer:
                             self.model.criterion = self.model.init_criterion()
                         except Exception:
                             self.model.criterion = None
-                    if getattr(self.model, "criterion", None) is not None and hasattr(self.model.criterion, "mat_weight"):
+                    if getattr(self.model, "criterion", None) is not None and hasattr(
+                        self.model.criterion, "mat_weight"
+                    ):
                         self.model.criterion.mat_weight = float(mat_w)
                         if RANK in {-1, 0}:
-                            LOGGER.info(f"mat_weight scheduled to {self.model.criterion.mat_weight:.4f} for epoch {epoch}")
-              except Exception:
-                  pass
+                            LOGGER.info(
+                                f"mat_weight scheduled to {self.model.criterion.mat_weight:.4f} for epoch {epoch}"
+                            )
+                except Exception:
+                    pass
 
             self._model_train()
             if RANK != -1:

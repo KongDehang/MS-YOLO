@@ -243,10 +243,10 @@ class v8DetectionLoss:
         self.device = device
 
         self.use_dfl = m.reg_max > 1
-        
+
         # Initialize maximum number of boxes for GT indexing
         self.n_max_boxes = 100  # Default max boxes per image for target assignment
-        
+
         self.assigner = TaskAlignedAssigner(topk=tal_topk, num_classes=self.nc, alpha=0.5, beta=6.0)
         self.bbox_loss = BboxLoss(m.reg_max).to(device)
         self.proj = torch.arange(m.reg_max, dtype=torch.float, device=device)
@@ -303,7 +303,7 @@ class v8DetectionLoss:
                 f"batch (feats[0].shape[0]) = {batch0}, expected no = {expected_no}\n"
                 f"total elements across feats = {total_elements}\n"
                 f"expected elements for view with (batch, no, -1) = batch*no*X where X must be an integer dividing each feat numel\n"
-                f"Suggestion: verify model Detect module attributes nc and reg_max match dataset (m.nc={getattr(self,'nc',None)}, m.reg_max={getattr(self,'reg_max',None)})\n"
+                f"Suggestion: verify model Detect module attributes nc and reg_max match dataset (m.nc={getattr(self, 'nc', None)}, m.reg_max={getattr(self, 'reg_max', None)})\n"
             )
             raise RuntimeError(msg) from e
         if getattr(self, "nc2", 0):
@@ -331,7 +331,9 @@ class v8DetectionLoss:
         ne = 1 + 1 + 4
         if bidx.numel() == 0 or cls_flat.numel() == 0 or bboxes_flat.numel() == 0:
             # create an empty targets tensor with shape (0, ne) on the loss device
-            targets = torch.zeros((0, ne), device=self.device, dtype=bboxes_flat.dtype if bboxes_flat.numel() else torch.float32)
+            targets = torch.zeros(
+                (0, ne), device=self.device, dtype=bboxes_flat.dtype if bboxes_flat.numel() else torch.float32
+            )
         else:
             targets = torch.cat((bidx, cls_flat, bboxes_flat), 1).to(bboxes_flat.dtype).to(self.device)
         targets = self.preprocess(targets, batch_size, scale_tensor=imgsz[[1, 0, 1, 0]])
@@ -368,7 +370,9 @@ class v8DetectionLoss:
             bboxes_flat2 = batch["bboxes"]
             ne2 = 1 + 1 + 4
             if bidx2.numel() == 0 or cls2_flat.numel() == 0 or bboxes_flat2.numel() == 0:
-                targets2 = torch.zeros((0, ne2), device=self.device, dtype=bboxes_flat2.dtype if bboxes_flat2.numel() else torch.float32)
+                targets2 = torch.zeros(
+                    (0, ne2), device=self.device, dtype=bboxes_flat2.dtype if bboxes_flat2.numel() else torch.float32
+                )
             else:
                 targets2 = torch.cat((bidx2, cls2_flat, bboxes_flat2), 1).to(bboxes_flat2.dtype).to(self.device)
 
@@ -378,23 +382,29 @@ class v8DetectionLoss:
 
             # Map the assigned GT indices (target_gt_idx) to material labels for each anchor
             batch_ind = torch.arange(end=batch_size, dtype=torch.int64, device=gt_labels2.device)[..., None]
-            
+
             # Calculate actual number of boxes for safe indexing
             actual_max_boxes = gt_labels2.shape[1]  # Get actual number of boxes from GT tensor
             target_gt_idx_offset = target_gt_idx + batch_ind * actual_max_boxes  # (b, h*w)
 
             # flatten gt_labels2 and prepare for indexing
             gt_labels2_flat = gt_labels2.long().flatten()
-            
+
             # Guard indexing if gt_labels2_flat is empty
             if gt_labels2_flat.numel() == 0:
                 # no gt material labels present -> build empty target_labels2 matching anchor layout
-                target_labels2 = torch.zeros((target_gt_idx.shape[0], target_gt_idx.shape[1]), dtype=torch.long, device=gt_labels2.device)
+                target_labels2 = torch.zeros(
+                    (target_gt_idx.shape[0], target_gt_idx.shape[1]), dtype=torch.long, device=gt_labels2.device
+                )
             else:
                 # Ensure indices are within bounds
                 valid_mask = target_gt_idx_offset < gt_labels2_flat.numel()
-                target_gt_idx_offset = torch.where(valid_mask, target_gt_idx_offset, torch.zeros_like(target_gt_idx_offset))
-                target_labels2 = torch.where(valid_mask, gt_labels2_flat[target_gt_idx_offset], torch.zeros_like(target_gt_idx_offset))
+                target_gt_idx_offset = torch.where(
+                    valid_mask, target_gt_idx_offset, torch.zeros_like(target_gt_idx_offset)
+                )
+                target_labels2 = torch.where(
+                    valid_mask, gt_labels2_flat[target_gt_idx_offset], torch.zeros_like(target_gt_idx_offset)
+                )
 
             # build one-hot target scores for material classes and apply the same norm factor as primary target_scores
             target_scores2 = torch.zeros(
@@ -437,7 +447,9 @@ class v8DetectionLoss:
         loss[2] *= self.hyp_dfl  # dfl gain
         # Combine material loss into overall cls loss with weight
         if getattr(self, "nc2", 0):
-            loss = torch.cat((loss, mat_loss.unsqueeze(0))) if len(loss) == 3 else torch.cat((loss, mat_loss.unsqueeze(0)))
+            loss = (
+                torch.cat((loss, mat_loss.unsqueeze(0))) if len(loss) == 3 else torch.cat((loss, mat_loss.unsqueeze(0)))
+            )
             # add material loss into total: here we will return loss * batch_size as before but sum externally
             # incorporate weight into total scalar returned
             total_loss = (loss[:3].sum() + self.mat_weight * loss[3]) * batch_size

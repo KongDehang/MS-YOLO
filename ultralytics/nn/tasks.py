@@ -1,17 +1,18 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
 import contextlib
+import copy
 import pickle
 import re
 import types
 from copy import deepcopy
-import copy
 from pathlib import Path
 
 import torch
 import torch.nn as nn
 
 from ultralytics.nn.autobackend import check_class_names
+from ultralytics.nn.extra_modules.attention import BandAttention, BandAttentionV2
 from ultralytics.nn.modules import (
     AIFI,
     C1,
@@ -69,9 +70,7 @@ from ultralytics.nn.modules import (
     YOLOEDetect,
     YOLOESegment,
     v10Detect,
-    CBAM
 )
-from ultralytics.nn.extra_modules.attention import BandAttention, BandAttentionV2
 from ultralytics.utils import DEFAULT_CFG_DICT, LOGGER, YAML, colorstr, emojis
 from ultralytics.utils.checks import check_requirements, check_suffix, check_yaml
 from ultralytics.utils.loss import (
@@ -311,7 +310,7 @@ class BaseModel(torch.nn.Module):
         model = weights["model"] if isinstance(weights, dict) else weights  # torchvision models are not dicts
         csd = model.float().state_dict()  # checkpoint state_dict as FP32
         # intersect keys with matching shapes
-        updated_csd = intersect_dicts(csd, self.state_dict())  # intersect
+        intersect_dicts(csd, self.state_dict())  # intersect
 
         # For keys present in our model but missing or mismatched in the checkpoint, try to safely copy
         # compatible slices (e.g., first conv multi-channel transfer handled below). Also avoid overwriting
@@ -464,18 +463,18 @@ class DetectionModel(BaseModel):
                 # This gives the secondary classification its own feature representation
                 transform_modules = []
                 cv3b_modules = []
-                
+
                 for i in range(m.nl):
                     # Get the input channel count from the actual input to cv3[i] or cv2[i]
                     # cv2[i] and cv3[i] both take the same input, so we can use either
                     # cv2[i] structure: Sequential(Conv(x, c2, 3), Conv(c2, c2, 3), nn.Conv2d(...))
                     # cv3[i] structure: Sequential(DWConv(x, x, 3) or Conv(x, c3, 3), ...)
-                    
+
                     # Get input channels from cv2[i] or cv3[i]
                     try:
                         # Try to get from cv2 first (simpler structure)
                         first_conv = m.cv2[i][0]  # First Conv in the sequential
-                        if hasattr(first_conv, 'conv'):
+                        if hasattr(first_conv, "conv"):
                             # It's a Conv module
                             in_channels = first_conv.conv.in_channels
                         elif isinstance(first_conv, nn.Conv2d):
@@ -483,7 +482,7 @@ class DetectionModel(BaseModel):
                         else:
                             # Fallback: try cv3
                             first_conv = m.cv3[i][0][0] if isinstance(m.cv3[i][0], nn.Sequential) else m.cv3[i][0]
-                            if hasattr(first_conv, 'conv'):
+                            if hasattr(first_conv, "conv"):
                                 in_channels = first_conv.conv.in_channels
                             elif isinstance(first_conv, nn.Conv2d):
                                 in_channels = first_conv.in_channels
@@ -492,7 +491,7 @@ class DetectionModel(BaseModel):
                     except Exception as e:
                         LOGGER.warning(f"Could not infer input channels for layer {i}, using default 256. Error: {e}")
                         in_channels = 256
-                    
+
                     # Create independent feature transform layer
                     # Use C2f for better feature extraction with residual connections
                     # P3 (i=0, small objects) uses n=2 bottlenecks for richer features
@@ -501,7 +500,7 @@ class DetectionModel(BaseModel):
                     transform = C2f(in_channels, in_channels, n=n_bottlenecks, shortcut=True)
                     # transform = Conv(in_channels, in_channels, k=3, s=1)  # simpler alternative
                     transform_modules.append(transform)
-                    
+
                     # Build cv3b by copying existing cv3 blocks but replacing final conv out_channels -> nc2
                     block = copy.deepcopy(m.cv3[i])
                     if isinstance(block, nn.Sequential):
@@ -543,7 +542,7 @@ class DetectionModel(BaseModel):
                                 cv3b_modules.append(block)
                         except Exception:
                             cv3b_modules.append(block)
-                
+
                 # Assign both transform and cv3b modules to the Detect head
                 m.cv3b_transform = nn.ModuleList(transform_modules)
                 m.cv3b = nn.ModuleList(cv3b_modules)
