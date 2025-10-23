@@ -102,7 +102,7 @@ jobs:
           print(json.dumps(response.json(), indent=2))
 
   Benchmarks:
-    if: github.event_name != 'workflow_dispatch' || github.event.inputs.benchmarks == 'true'
+    if: github.repository == 'ultralytics/ultralytics' && (github.event_name != 'workflow_dispatch' || github.event.inputs.benchmarks == 'true')
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -163,7 +163,7 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
 
   Tests:
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    if: github.repository == 'ultralytics/ultralytics' && (github.event_name == 'pull_request' || github.event_name == 'push')
     timeout-minutes: 60
     runs-on: ${{ matrix.os }}
     strategy:
@@ -210,7 +210,7 @@ jobs:
         run: uv cache prune --ci
 
   SlowTests:
-    if: (github.event_name == 'workflow_dispatch' && github.event.inputs.tests == 'true') || github.event_name == 'schedule'
+    if: github.repository == 'ultralytics/ultralytics' && ((github.event_name == 'workflow_dispatch' && github.event.inputs.tests == 'true') || github.event_name == 'schedule')
     timeout-minutes: 360
     runs-on: ${{ matrix.os }}
     strategy:
