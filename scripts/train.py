@@ -24,8 +24,8 @@ def get_dataset_info(data_yaml_path):
 
 if __name__ == '__main__':    
     # 数据集配置文件路径
-    # data_path = './datasets/spectrum500/data.yaml'
-    data_path = './datasets/chiliseed/data.yaml'
+    data_path = './datasets/spectrum500/data.yaml'
+    # data_path = './datasets/chiliseed/data.yaml'
     
     # 根据数据集信息选择合适的模型配置
     data_cfg = get_dataset_info(data_path)

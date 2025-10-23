@@ -145,6 +145,7 @@ dmypy.json
 runs/
 /logs
 /tools
+/docs
 wandb/
 .DS_Store
 

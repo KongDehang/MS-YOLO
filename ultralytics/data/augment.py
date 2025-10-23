@@ -841,11 +841,19 @@ class Mosaic(BaseMixTransform):
         if not mosaic_labels:
             return {}
         cls = []
+        cls2 = []  # Collect cls2 labels for material classification
         instances = []
         imgsz = self.imgsz * 2  # mosaic imgsz
+        
+        # Check if ALL images have cls2 (consistent dual classification)
+        has_cls2 = all("cls2" in labels and labels["cls2"] is not None for labels in mosaic_labels)
+        
         for labels in mosaic_labels:
             cls.append(labels["cls"])
             instances.append(labels["instances"])
+            # Collect cls2 if present (for dual classification tasks)
+            if has_cls2:
+                cls2.append(labels["cls2"])
         # Final labels
         final_labels = {
             "im_file": mosaic_labels[0]["im_file"],
@@ -858,6 +866,9 @@ class Mosaic(BaseMixTransform):
         final_labels["instances"].clip(imgsz, imgsz)
         good = final_labels["instances"].remove_zero_area_boxes()
         final_labels["cls"] = final_labels["cls"][good]
+        # Add cls2 to final labels if it exists (must check has_cls2 AND cls2 list)
+        if has_cls2 and cls2:
+            final_labels["cls2"] = np.concatenate(cls2, 0)[good]
         if "texts" in mosaic_labels[0]:
             final_labels["texts"] = mosaic_labels[0]["texts"]
         return final_labels
@@ -926,6 +937,9 @@ class MixUp(BaseMixTransform):
         labels["img"] = (labels["img"] * r + labels2["img"] * (1 - r)).astype(np.uint8)
         labels["instances"] = Instances.concatenate([labels["instances"], labels2["instances"]], axis=0)
         labels["cls"] = np.concatenate([labels["cls"], labels2["cls"]], 0)
+        # Handle cls2 if present (for dual classification tasks)
+        if "cls2" in labels and "cls2" in labels2:
+            labels["cls2"] = np.concatenate([labels["cls2"], labels2["cls2"]], 0)
         return labels
 
 
@@ -1044,6 +1058,9 @@ class CutMix(BaseMixTransform):
 
         labels["cls"] = np.concatenate([labels["cls"], labels2["cls"][indexes2]], axis=0)
         labels["instances"] = Instances.concatenate([labels["instances"], instances2], axis=0)
+        # Handle cls2 if present (for dual classification tasks)
+        if "cls2" in labels and "cls2" in labels2:
+            labels["cls2"] = np.concatenate([labels["cls2"], labels2["cls2"][indexes2]], axis=0)
         return labels
 
 
@@ -1328,6 +1345,7 @@ class RandomPerspective:
 
         img = labels["img"]
         cls = labels["cls"]
+        cls2 = labels.get("cls2", None)  # Get cls2 for dual classification
         instances = labels.pop("instances")
         # Make sure the coord formats are right
         instances.convert_bbox(format="xyxy")
@@ -1361,6 +1379,9 @@ class RandomPerspective:
         )
         labels["instances"] = new_instances[i]
         labels["cls"] = cls[i]
+        # Also filter cls2 for dual classification
+        if cls2 is not None:
+            labels["cls2"] = cls2[i]
         labels["img"] = img
         labels["resized_shape"] = img.shape[:2]
         return labels
@@ -1841,6 +1862,7 @@ class CopyPaste(BaseMixTransform):
         if "mosaic_border" not in labels1:
             im = im.copy()  # avoid modifying original non-mosaic image
         cls = labels1["cls"]
+        cls2 = labels1.get("cls2", None)  # Get cls2 if it exists
         h, w = im.shape[:2]
         instances = labels1.pop("instances")
         instances.convert_bbox(format="xyxy")
@@ -1858,6 +1880,9 @@ class CopyPaste(BaseMixTransform):
         indexes = indexes[sorted_idx]
         for j in indexes[: round(self.p * n)]:
             cls = np.concatenate((cls, labels2.get("cls", cls)[[j]]), axis=0)
+            # Also concatenate cls2 for dual classification
+            if cls2 is not None and "cls2" in labels2:
+                cls2 = np.concatenate((cls2, labels2["cls2"][[j]]), axis=0)
             instances = Instances.concatenate((instances, instances2[[j]]), axis=0)
             cv2.drawContours(im_new, instances2.segments[[j]].astype(np.int32), -1, (1, 1, 1), cv2.FILLED)
 
@@ -1869,6 +1894,8 @@ class CopyPaste(BaseMixTransform):
 
         labels1["img"] = im
         labels1["cls"] = cls
+        if cls2 is not None:
+            labels1["cls2"] = cls2
         labels1["instances"] = instances
         return labels1
 
@@ -2187,6 +2214,7 @@ class Format:
         img = labels.pop("img")
         h, w = img.shape[:2]
         cls = labels.pop("cls")
+        cls2 = labels.pop("cls2", None)  # Pop cls2 if it exists
         instances = labels.pop("instances")
         instances.convert_bbox(format=self.bbox_format)
         instances.denormalize(w, h)
@@ -2204,6 +2232,9 @@ class Format:
         labels["img"] = self._format_img(img)
         labels["cls"] = torch.from_numpy(cls) if nl else torch.zeros(nl, 1)
         labels["bboxes"] = torch.from_numpy(instances.bboxes) if nl else torch.zeros((nl, 4))
+        # Handle cls2 (material classification) if it exists
+        if cls2 is not None:
+            labels["cls2"] = torch.from_numpy(cls2) if nl else torch.zeros(nl, 1)
         if self.return_keypoint:
             labels["keypoints"] = (
                 torch.empty(0, 3) if instances.keypoints is None else torch.from_numpy(instances.keypoints)

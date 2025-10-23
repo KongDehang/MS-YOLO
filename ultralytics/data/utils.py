@@ -274,7 +274,11 @@ def verify_image_label(args: tuple) -> list:
                         )
                 _, i = np.unique(lb, axis=0, return_index=True)
                 if len(i) < nl:  # duplicate row check
+                    print(f"DEBUG [verify_image_label]: Removing {nl - len(i)} duplicates from {im_file}")
                     lb = lb[i]  # remove duplicates
+                    if cls2 is not None:
+                        print(f"DEBUG: cls2 before removal: {cls2.shape}, after: {cls2[i].shape}")
+                        cls2 = cls2[i]  # CRITICAL FIX: also remove duplicate cls2 labels
                     if segments:
                         segments = [segments[x] for x in i]
                     msg = f"{prefix}{im_file}: {nl - len(i)} duplicate labels removed"
